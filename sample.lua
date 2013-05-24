@@ -32,10 +32,15 @@ app:get('/some_json', function()
   return '{"a_json_thing": "woof"}', {['Content-Type'] = 'application/json'}
 end)
 
+-- Serve some static files
+app:get('/static/<path:.+>', heart.static('static'))
+
 -- 404 handler
 app.not_found = function(req)
+  -- Oh and don't return 404 here unless you want Bad Things to happen
   return 'Sorry, couldn\'t find ' .. req.url
 end
+
 
 -- Suppress logs
 

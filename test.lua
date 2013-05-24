@@ -43,6 +43,7 @@ register_route('/birthday2/<name:identifier>/<age:int>', function(params) return
 
 -- just try some stuff
 register_route('/hey-hows-it-going ;)/', identity(true))
+register_route('/static/<path:.+>', function(params) return params.path end)
 
 assert(dispatch_request('/') == true)
 assert(dispatch_request('/$') == true)
@@ -50,5 +51,8 @@ assert(dispatch_request('/hello/Billy') == 'Billy')
 assert(table_eq(dispatch_request('/birthday/Jim/20'), {'Jim', '20'}))
 assert(table_eq(dispatch_request('/birthday2/Jim/20'), {'Jim', '20'}))
 assert(dispatch_request('/hey-hows-it-going ;)/'))
+
+assert(dispatch_request('/static/file.txt') == 'file.txt')
+assert(dispatch_request('/static/file/') == 'file/')
 
 print('done testing!')

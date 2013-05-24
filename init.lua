@@ -4,6 +4,9 @@
 local url = require 'url'
 local table = require 'table'
 local string = require 'string'
+-- for static files
+local fs = require 'fs'
+local mime = require 'mime'
 
 ----- URL DISPATCHING
 
@@ -30,7 +33,7 @@ end
 
 local function route_parse(route)
   local match = ''
-  local exact = false
+  local exact = true
   local params = {}
 
   local i = 1
@@ -105,7 +108,7 @@ end
 -- Called against string.find to parse results into an array of names
 local function pattern_results(names, a, b, ...)
   -- If match was not successful, keep going
-  if not a then return false end
+  if a ~= 1 then return false end
   local params = {}
   local arg = { n = select('#', ...), ... }
   for i, name in ipairs(names) do
@@ -141,8 +144,14 @@ local function respond(app, req, res, code, headers, body)
   if body then
     headers['Content-Length'] = #body
   end
+
   if not headers['Content-Type'] then
     headers['Content-Type'] = app.default_content_type
+  end
+
+  if code == 404 then
+    body = app.not_found(req)
+    headers['Content-Length'] = #body
   end
 
   app.log(code)
@@ -165,6 +174,7 @@ local function request(app, req, res)
 
   app.log(method .. ' ' .. path) 
 
+  
   local handler, params = dispatch(path, routes.simple_routes, routes.pattern_routes)
 
   if params then
@@ -173,12 +183,11 @@ local function request(app, req, res)
     end
   end
 
-  req.heart = { params = params or emptyparamtable }
+  req.heart = { app = app, params = params or emptyparamtable }
 
   if not handler then
     app.log('Failed to dispatch URL')
-    local body = app.not_found(req)
-    respond(app, req, res, 404, {}, body)
+    respond(app, req, res, 404, {}, nil)
   else
     code, body, headers = handler(req, res)
     -- Shortcut: return only a string or a string and headers
@@ -186,6 +195,12 @@ local function request(app, req, res)
       respond(app, req, res, 200, body or {}, code)
     else
       assert(type(code) == 'number')
+
+      -- If code == 0 then assume the handler has written the response
+      if code == 0 then
+        return
+      end
+
       headers = headers or {}
       -- Special redirect handling
       -- Allows us to do something like
@@ -203,7 +218,11 @@ local function request(app, req, res)
 end
 
 local function mount(self, method, route, handler)
+  assert(self)
+  assert(type(self) == 'table' and 'you probably meant to call this as a method')
+  self.log('MOUNT ' .. tostring(route))
   local pattern, params = route_parse(route)
+
   
   if params then
     method.pattern_routes[pattern] = { handler, params }
@@ -218,6 +237,7 @@ local function get(self, route, handler)
   return mount(self, self.GET, route, handler)
 end
 
+-- Default 404 message
 local function not_found(req)
   return "Heart couldn't find " .. req.url .. '.\n<br/>To customize this message, write something like <pre>app.not_found = function(req) return "Couldn\'t find " .. req.url end</pre>'
 end
@@ -239,4 +259,40 @@ local function app()
   return app
 end
 
-return { route_parse = route_parse, dispatch = dispatch, app = app }
+----- SERVE STATIC FILES
+
+local function static(dir)
+  return function(req, restbl)
+    local path = dir .. '/' .. req.heart.params.path
+    req.heart.app.log('Serving up ' .. path)
+
+    local function res(code, headers, body)
+      restbl:writeHead(code, headers)
+      restbl:finish(body)
+    end
+
+    fs.open(path, 'r', function(err, fd)
+      if err then
+        if err.code == 'ENOENT' then
+          return res(404, {}, 'Could not find ' .. path)
+        end
+        return res(500, {}, err.message)
+      end
+
+      fs.fstat(fd, function(err, stat)
+        if not stat.is_file then
+          return res(500, {}, 'Not a file')
+        end
+        
+        headers = { ['Content-Type'] = mime.getType(path), ['Content-Length'] = stat.size }
+        restbl:writeHead(200, headers)
+        fs.createReadStream(nil, { fd = fd }):pipe(restbl)
+      end)
+    end)
+    -- We'll handle response manually
+    return 0
+  end
+end
+
+----- MODULE
+return { static = static, route_parse = route_parse, dispatch = dispatch, app = app }
