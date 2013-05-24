@@ -20,6 +20,10 @@ local app = heart.app()
 app:get('/', function()
   return 'Hello, world!'
 )
+
+local http = require 'http'
+
+http.createServer(app):listen(8080)
 ```
 
 ### Documentation
