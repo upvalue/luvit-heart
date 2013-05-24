@@ -2,6 +2,7 @@
 -- pretty much just handles routing and http requests/responses
 
 local url = require 'url'
+local querystring = require 'querystring'
 local table = require 'table'
 local string = require 'string'
 -- for static files
@@ -159,11 +160,46 @@ local function respond(app, req, res, code, headers, body)
   res:finish(body)
 end
 
+local function sugary_response(app, req, res, code, body, headers)
+  -- Shortcut: return only a string or a string and headers
+  if type(code) == 'string' then
+    respond(app, req, res, 200, body or {}, code)
+  else
+    assert(type(code) == 'number')
+
+    -- If code == 0 then assume the handler has written the response
+    if code == nil then
+      return
+    end
+
+    headers = headers or {}
+    -- Special redirect handling
+    -- Allows us to do something like
+    -- return 301, '/other/url'
+
+    if code == 301 or code == 302 then
+      headers['Location'] = body
+      body = nil
+    end
+
+    respond(app, req, res, code, headers, body)
+  end
+end
+
 local function unescape(s)
   s = string.gsub (s, "+", " ")
   s = string.gsub (s, "%%(%x%x)", function(h) return string.char(tonumber(h,16)) end)
   s = string.gsub (s, "\r\n", "\n")
   return s
+end
+
+local function call_handler(app, handler, req, res)
+  local code, body, headers = handler(req, res)
+
+  -- Ignore nil return values, assume the handler has already sent a response
+  if code ~= nil then
+    sugary_response(app, req, res, code, body, headers)
+  end
 end
 
 local function request(app, req, res)
@@ -174,47 +210,43 @@ local function request(app, req, res)
 
   app.log(method .. ' ' .. path) 
 
+  local handler, params 
   
-  local handler, params = dispatch(path, routes.simple_routes, routes.pattern_routes)
+  if routes then
+    handler, params = dispatch(path, routes.simple_routes, routes.pattern_routes)
 
-  if params then
-    for k, v in pairs(params) do
-      params[k] = unescape(v)
+    if params then
+      for k, v in pairs(params) do
+        params[k] = unescape(v)
+      end
     end
+
   end
 
   req.heart = { app = app, params = params or emptyparamtable }
+  res.heart = { respond = function(code, body, headers) sugary_response(app, req, res, code, body, headers) return 0 end }
 
   if not handler then
     app.log('Failed to dispatch URL')
     respond(app, req, res, 404, {}, nil)
-  else
-    code, body, headers = handler(req, res)
-    -- Shortcut: return only a string or a string and headers
-    if type(code) == 'string' then
-      respond(app, req, res, 200, body or {}, code)
-    else
-      assert(type(code) == 'number')
-
-      -- If code == 0 then assume the handler has written the response
-      if code == 0 then
-        return
-      end
-
-      headers = headers or {}
-      -- Special redirect handling
-      -- Allows us to do something like
-      -- return 301, '/other/url'
-
-      if code == 301 or code == 302 then
-        headers['Location'] = body
-        body = nil
-      end
-
-      respond(app, req, res, code, headers, body)
-    end
-
   end
+
+  if method == 'POST' then
+    local body = ''
+    req:on('data', function(chunk) body = body .. chunk end)
+    req:on('end', function()
+      local pparams = querystring.parse(body)
+      if not params then params = {} end
+      for k,v in pairs(pparams) do
+        params[k] = v
+      end
+      req.heart.params = params
+      call_handler(app, handler, req, res)
+    end)
+  else
+    call_handler(app, handler, req, res)
+  end
+
 end
 
 local function mount(self, method, route, handler)
@@ -223,7 +255,6 @@ local function mount(self, method, route, handler)
   self.log('MOUNT ' .. tostring(route))
   local pattern, params = route_parse(route)
 
-  
   if params then
     method.pattern_routes[pattern] = { handler, params }
   else
@@ -237,6 +268,10 @@ local function get(self, route, handler)
   return mount(self, self.GET, route, handler)
 end
 
+local function post(self, route, handler)
+  return mount(self, self.POST, route, handler)
+end
+
 -- Default 404 message
 local function not_found(req)
   return "Heart couldn't find " .. req.url .. '.\n<br/>To customize this message, write something like <pre>app.not_found = function(req) return "Couldn\'t find " .. req.url end</pre>'
@@ -247,6 +282,7 @@ end
 local appt = {
   __call = request,
   get = get,
+  post = post,
   log = function(...) print('heart: ', ...) end,
   not_found = not_found
 }
@@ -254,7 +290,12 @@ local appt = {
 appt.__index = appt
 
 local function app()
-  local app = { default_response_type = 'text/html', GET = { simple_routes = {}, pattern_routes = {} }, middleware = {} }
+  local app = {
+    default_response_type = 'text/html',
+    GET = { simple_routes = {}, pattern_routes = {} },
+    POST = { simple_routes = {}, pattern_routes = {} },
+    middleware = {}
+  }
   setmetatable(app, appt)
   return app
 end

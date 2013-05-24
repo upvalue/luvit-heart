@@ -35,6 +35,15 @@ end)
 -- Serve some static files
 app:get('/static/<path:.+>', heart.static('static'))
 
+-- Post example
+app:get('/post_example', function()
+  return '<form action="/post_example" method="POST"><input type="text" name="echo" value="Hello World" /><textarea name="text"></textarea><input type="submit" value="Submit" /></form>'
+end)
+
+app:post('/post_example', function(req, res)
+  return 'Echo: ' .. req.heart.params.echo .. '<br /><p>' .. req.heart.params.text .. '</p>'
+end)
+
 -- 404 handler
 app.not_found = function(req)
   -- Oh and don't return 404 here unless you want Bad Things to happen

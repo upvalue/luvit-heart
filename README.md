@@ -13,18 +13,16 @@ In your project directory:
 Then create, say, main.lua
 
 ```lua
-local heart = require('heart')
-
-local app = heart.app()
+local app = require('heart').app()
 
 app:get('/', function()
   return 'Hello, world!'
 )
 
-local http = require 'http'
-
-http.createServer(app):listen(8080)
+require('http').createServer(app):listen(8080)
 ```
+
+Heart is definitely a little more verbose and explicit than Ruby micro frameworks. I like it that way.
 
 ### Documentation
 
@@ -90,7 +88,12 @@ directory:
 app.get('/static/<path:.+>', heart.static('./static'))
 ```
 
-#### app members
+#### application members
+
+##### default_content_type : string = "text/html"
+
+Change the assumed content type of strings returned by handlers. Useful if you wanted to make, for instance, a JSON
+app.
 
 ##### not_found : function(req)
 
