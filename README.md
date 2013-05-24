@@ -7,6 +7,7 @@ Released under the [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2
 
 In your project directory:
 > mkdir -p modules/
+
 > git clone git://github.com/ioddly/luvit-heart.git modules/heart
 
 Then create, say, main.lua
