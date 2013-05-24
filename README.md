@@ -63,11 +63,17 @@ URL routes have a fairly simple syntax and are based on Lua's string.find, so se
 to write complicated routes.
 
 You can write normal text: /hello/world
+
 You can use named parameters /hello/:name
+
 (Which will match anything up to the next /)
+
 And you can match patterns: /hello/<name:%a%w*> 
+
 There are also two built-in patterns for convenience, identifier and int
+
 You can use them like so:  /birthday/<name:identifier>/<age:int>
+
 Which is the same as: /birthday/<name:%a%w*>/<age:%d+>
 
 ##### heart.app
