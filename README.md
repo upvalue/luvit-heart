@@ -37,7 +37,7 @@ req has an additional field added: heart, which contains any parameters given in
 is /hello/:name, you can access name in your handler through req.heart.params.name
 
 Once your handler is finished doing whatever it needs to do, you should return your response values. The simplest way
-to do this is to return a string, which will return a 200 with no need to write headers manually. 
+to do this is to return a string, which will cause the server to respond with that string along with 200 OK and some relevant headers.
 
 However, if you need to do more with http response codes, you can redirect stuff
 
