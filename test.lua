@@ -1,4 +1,4 @@
-local heart = require 'module'
+local heart = require 'heart'
 
 -- Test URL dispatching
 
@@ -15,14 +15,10 @@ local function register_route(route, handler)
 end
 
 local function dispatch_request(path)
-  local result = heart.dispatch(path, simple_routes, pattern_routes)
+  local handler, params = heart.dispatch(path, simple_routes, pattern_routes)
 
-  assert(result)
-  if type(result) == 'function' then
-    return result()
-  else
-    return result[1](result)
-  end
+  assert(handler)
+  return handler(params)
 end
 
 function table_eq(a, b)

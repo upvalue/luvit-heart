@@ -1,9 +1,12 @@
 -- heart.lua - a micro web framework for luvit
 -- pretty much just handles routing and http requests/responses
 
+local url = require 'url'
+local table = require 'table'
+local string = require 'string'
+
 ----- URL DISPATCHING
 
--- URL Dispatcher
 -- Supports the following sorts of syntax: (patterns are matched with string.find)
 -- /
 -- /hello/:name
@@ -18,9 +21,10 @@
 -- false if string:find is not necessary (exact comparison is enough) or a table of parameter names if it is
 
 local route_parse_specialchars = '[%(%)%%%+%-%*%?%[%^%$]'
+
 local function route_check(exists, route, i)
   if not exists then
-    error('route parser choked on ' .. route:sub(i))
+    error('heart: route parser choked on ' .. route:sub(i))
   end
 end
 
@@ -113,7 +117,7 @@ end
 local function dispatch(path, strings, patterns)
   for k, ret in pairs(strings) do
     if path == k then
-      return ret
+      return ret, false
     end
   end
 
@@ -122,8 +126,7 @@ local function dispatch(path, strings, patterns)
     local result = pattern_results(params, path:find(pattern))
     if result then
       -- return handler function in existing table
-      result[1] = tbl[1]
-      return result
+      return tbl[1], result
     end
   end
   
@@ -132,39 +135,106 @@ end
 
 ----- REQUEST HANDLING
 
-local function request(app, req, res)
-  -- dispatch based on url
-  local route = req.url
-  local handler = app.routes['/']
+local emptyparamtable = {}
 
-  -- prepare arguments object
-  local x = { req = req, res = res, params = {} }
+local function respond(app, req, res, code, headers, body)
+  if body then
+    headers['Content-Length'] = #body
+  end
+  if not headers['Content-Type'] then
+    headers['Content-Type'] = app.default_content_type
+  end
 
-  local body = handler(x)
-
-  res:writeHead(200, {
-    ['Content-Type'] = 'text/plain',
-    ['Content-Length'] = #body
-  })
-
+  app.log(code)
+  res:writeHead(code, headers)
   res:finish(body)
 end
 
+local function unescape(s)
+  s = string.gsub (s, "+", " ")
+  s = string.gsub (s, "%%(%x%x)", function(h) return string.char(tonumber(h,16)) end)
+  s = string.gsub (s, "\r\n", "\n")
+  return s
+end
+
+local function request(app, req, res)
+  -- dispatch based on url
+  local path = url.parse(req.url).pathname
+  local method = req.method
+  local routes = app[method]
+
+  app.log(method .. ' ' .. path) 
+
+  local handler, params = dispatch(path, routes.simple_routes, routes.pattern_routes)
+
+  if params then
+    for k, v in pairs(params) do
+      params[k] = unescape(v)
+    end
+  end
+
+  req.heart = { params = params or emptyparamtable }
+
+  if not handler then
+    app.log('Failed to dispatch URL')
+    local body = app.not_found(req)
+    respond(app, req, res, 404, {}, body)
+  else
+    code, body, headers = handler(req, res)
+    -- Shortcut: return only a string or a string and headers
+    if type(code) == 'string' then
+      respond(app, req, res, 200, body or {}, code)
+    else
+      assert(type(code) == 'number')
+      headers = headers or {}
+      -- Special redirect handling
+      -- Allows us to do something like
+      -- return 301, '/other/url'
+
+      if code == 301 or code == 302 then
+        headers['Location'] = body
+        body = nil
+      end
+
+      respond(app, req, res, code, headers, body)
+    end
+
+  end
+end
+
+local function mount(self, method, route, handler)
+  local pattern, params = route_parse(route)
+  
+  if params then
+    method.pattern_routes[pattern] = { handler, params }
+  else
+    method.simple_routes[pattern] = handler
+  end
+end
+
+-- Somewhat confusingly, the routes containing tables for each method are also named after the method but with capital
+-- letters
 local function get(self, route, handler)
-  self.routes[route] = handler
+  return mount(self, self.GET, route, handler)
+end
+
+local function not_found(req)
+  return "Heart couldn't find " .. req.url .. '.\n<br/>To customize this message, write something like <pre>app.not_found = function(req) return "Couldn\'t find " .. req.url end</pre>'
 end
 
 ----- META SILLINESS
 
 local appt = {
   __call = request,
-  get = get
+  get = get,
+  log = function(...) print('heart: ', ...) end,
+  not_found = not_found
 }
 
 appt.__index = appt
 
 local function app()
-  local app = { simple_routes = {}, pattern_routes = {}, middleware = {} }
+  local app = { default_response_type = 'text/html', GET = { simple_routes = {}, pattern_routes = {} }, middleware = {} }
   setmetatable(app, appt)
   return app
 end
