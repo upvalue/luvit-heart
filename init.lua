@@ -347,4 +347,4 @@ local function static_file(path)
 end
 
 ----- MODULE
-return { static = static, route_parse = route_parse, dispatch = dispatch, app = app, static_file = static_file }
+return { static = static, route_parse = route_parse, dispatch = dispatch, app = app, static_file = static_file, serve_file = serve_file }

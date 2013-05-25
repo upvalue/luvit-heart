@@ -81,6 +81,10 @@ Which is the same as: ```/birthday/<name:%a%w*>/<age:%d+>```
 heart.app() returns a new application - a table whose methods you use to create your application. Note that it is also
 a callable function that can be passed to http.createServer, and can also be wrapped in middleware if you so desire.
 
+##### serve_file(path : string)
+
+Serve a static file as a response.
+
 ##### static(dir: string)
 
 A utility handler that will serve up static files within a directory. Use it like so, and don't append a slash to the
