@@ -330,8 +330,7 @@ local function static(dir)
         fs.createReadStream(nil, { fd = fd }):pipe(restbl)
       end)
     end)
-    -- We'll handle response manually
-    return 0
+    -- Don't return anything so heart won't send a response
   end
 end
 
