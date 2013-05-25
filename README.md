@@ -1,4 +1,4 @@
-Heart is a simple micro web framework for [luvit](http://luvit.io). It basically just dispatches URLs and provides a
+Heart is a micro web framework for [luvit](http://luvit.io). It basically just dispatches URLs and provides a
 little sugar for dealing with HTTP requests and responses. Templates, sessions, and so forth are entirely up to you.
 
 Released under the [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0.txt)
@@ -22,7 +22,9 @@ app:get('/', function()
 require('http').createServer(app):listen(8080)
 ```
 
-Heart is definitely a little more verbose and explicit than Ruby micro frameworks. I like it that way.
+Heart is definitely a little more verbose and explicit than Ruby micro frameworks. I like it that way. I've also tried
+not to add too much sugar, in case luvit ever gets a consensus middleware system like Rack.  See sample.lua for a more
+complex example.
 
 ### Documentation
 

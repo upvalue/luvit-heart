@@ -50,7 +50,6 @@ app.not_found = function(req)
   return 'Sorry, couldn\'t find ' .. req.url
 end
 
-
 -- Suppress logs
 
 -- Serve it up!
