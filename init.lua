@@ -229,6 +229,7 @@ local function request(app, req, res)
   if not handler then
     app.log('Failed to dispatch URL')
     respond(app, req, res, 404, {}, nil)
+    return
   end
 
   if method == 'POST' then
@@ -302,37 +303,48 @@ end
 
 ----- SERVE STATIC FILES
 
-local function static(dir)
-  return function(req, restbl)
-    local path = dir .. '/' .. req.heart.params.path
-    req.heart.app.log('Serving up ' .. path)
+local function serve_file(req, res, path)
+  local function respond(code, headers, body)
+    res:writeHead(code, headers)
+    res:finish(body)
+  end
 
-    local function res(code, headers, body)
-      restbl:writeHead(code, headers)
-      restbl:finish(body)
+  req.heart.app.log('Serving static file ' .. path)
+
+  fs.open(path, 'r', function(err, fd)
+    if err then
+      if err.code == 'ENOENT' then
+        return respond(404, {}, 'Could not find ' .. path)
+      end
+      return respond(500, {}, err.message)
     end
 
-    fs.open(path, 'r', function(err, fd)
-      if err then
-        if err.code == 'ENOENT' then
-          return res(404, {}, 'Could not find ' .. path)
-        end
-        return res(500, {}, err.message)
+    fs.fstat(fd, function(err, stat)
+      if not stat.is_file then
+        return respond(500, {}, 'Not a file')
       end
-
-      fs.fstat(fd, function(err, stat)
-        if not stat.is_file then
-          return res(500, {}, 'Not a file')
-        end
-        
-        headers = { ['Content-Type'] = mime.getType(path), ['Content-Length'] = stat.size }
-        restbl:writeHead(200, headers)
-        fs.createReadStream(nil, { fd = fd }):pipe(restbl)
-      end)
+      
+      headers = { ['Content-Type'] = mime.getType(path), ['Content-Length'] = stat.size }
+      res:writeHead(200, headers)
+      fs.createReadStream(nil, { fd = fd }):pipe(res)
     end)
-    -- Don't return anything so heart won't send a response
+  end)
+end
+
+local function static(dir)
+  return function(req, res)
+    local path = dir .. '/' .. req.heart.params.path
+    print ('da path ' .. path)
+
+    serve_file(req, res, path)
+  end
+end
+
+local function static_file(path)
+  return function(req, res)
+    serve_file(req, res, path)
   end
 end
 
 ----- MODULE
-return { static = static, route_parse = route_parse, dispatch = dispatch, app = app }
+return { static = static, route_parse = route_parse, dispatch = dispatch, app = app, static_file = static_file }

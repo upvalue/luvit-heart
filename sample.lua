@@ -33,7 +33,9 @@ app:get('/some_json', function()
 end)
 
 -- Serve some static files
-app:get('/static/<path:.+>', heart.static('static'))
+app:get('/assets/<path:.+>', heart.static('sample-assets'))
+
+app:get('/file.txt', heart.static_file('sample-assets/file.txt'))
 
 -- Post example
 app:get('/post_example', function()
@@ -53,4 +55,4 @@ end
 -- Suppress logs
 
 -- Serve it up!
-http.createServer(app):listen(8080)
+http.createServer(app):listen(4567)
